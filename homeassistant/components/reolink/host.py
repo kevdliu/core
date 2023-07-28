@@ -32,7 +32,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util.ssl import SSLCipherList
 
-from .const import CONF_USE_HTTPS, DOMAIN
+from .const import CONF_USE_HTTPS, DOMAIN, CONF_ONVIF_EVENTS_REVERSE_PROXY
 from .exceptions import (
     PasswordIncompatible,
     ReolinkSetupException,
@@ -104,6 +104,7 @@ class ReolinkHost:
         self._webhook_reachable: bool = False
         self._long_poll_received: bool = False
         self._long_poll_error: bool = False
+        self._webhook_reverse_proxy = options.get(CONF_ONVIF_EVENTS_REVERSE_PROXY)
         self._cancel_poll: CALLBACK_TYPE | None = None
         self._cancel_onvif_check: CALLBACK_TYPE | None = None
         self._cancel_long_poll_check: CALLBACK_TYPE | None = None
@@ -568,6 +569,23 @@ class ReolinkHost:
             sub_type,
         )
 
+    def _get_webhook_base_url(self, event_id: str) -> str:
+        """Return the URL of the webhook reverse proxy if configured. Otherwise return the Home Assistant instance URL."""
+        if self._webhook_reverse_proxy:
+            return self._webhook_reverse_proxy
+
+        try:
+            return get_url(self._hass, prefer_external=False)
+        except NoURLAvailableError:
+            try:
+                return get_url(self._hass, prefer_external=True)
+            except NoURLAvailableError as err:
+                self.unregister_webhook()
+                raise ReolinkWebhookException(
+                    f"Error registering URL for webhook {event_id}: "
+                    "HomeAssistant URL is not available"
+                ) from err
+
     def register_webhook(self) -> None:
         """Register the webhook for motion events."""
         self.webhook_id = (
@@ -579,18 +597,7 @@ class ReolinkHost:
             self._hass, DOMAIN, event_id, event_id, self.handle_webhook
         )
 
-        try:
-            self._base_url = get_url(self._hass, prefer_external=False)
-        except NoURLAvailableError:
-            try:
-                self._base_url = get_url(self._hass, prefer_external=True)
-            except NoURLAvailableError as err:
-                self.unregister_webhook()
-                raise ReolinkWebhookException(
-                    f"Error registering URL for webhook {event_id}: "
-                    "HomeAssistant URL is not available"
-                ) from err
-
+        self._base_url = self._get_webhook_base_url(event_id)
         webhook_path = webhook.async_generate_path(event_id)
         self._webhook_url = f"{self._base_url}{webhook_path}"
 
