@@ -43,12 +43,19 @@
     "step": {
       "init": {
         "data": {
-          "protocol": "Protocol"
+          "protocol": "Protocol",
+          "onvif_events_reverse_proxy": "ONVIF Events Reverse Proxy (HTTP)"
         },
         "data_description": {
           "protocol": "Streaming protocol to use for the camera entities. RTSP supports 4K streams (h265 encoding) while RTMP and FLV do not. FLV is the least demanding on the camera."
         }
       }
+    },
+    "error": {
+      "webhook_test_unreachable": "Webhook cannot be reached via the reverse proxy.",
+      "webhook_test_timeout": "Test request to reverse proxy timed out.",
+      "webhook_test_invalid_url": "The URL of the reverse proxy is invalid.",
+      "webhook_test_error_response": "Reverse proxy responded to test request with error response code {response_code}."
     }
   },
   "exceptions": {
@@ -62,7 +69,7 @@
   "issues": {
     "https_webhook": {
       "title": "Reolink webhook URL uses HTTPS (SSL)",
-      "description": "Reolink products can not push motion events to an HTTPS address (SSL), please configure a (local) HTTP address under \"Home Assistant URL\" in the [network settings]({network_link}). The current (local) address is: `{base_url}`, a valid address could, for example, be `http://192.168.1.10:8123` where `192.168.1.10` is the IP of the Home Assistant device"
+      "description": "Reolink products can not push motion events to an HTTPS address (SSL), please configure a (local) HTTP address under \"Home Assistant URL\" in the [network settings]({network_link}). The current (local) address is: `{base_url}`, a valid address could, for example, be `http://192.168.1.10:8123` where `192.168.1.10` is the IP of the Home Assistant device. Alternatively, if you have configured Home Assistant to use HTTPS, you may set up a HTTP reverse proxy in front of Home Assistant and input the proxy's address in the integration's options menu."
     },
     "ssl": {
       "title": "Reolink incompatible with global SSL certificate",
