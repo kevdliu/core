@@ -29,7 +29,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
-from homeassistant.helpers.network import NoURLAvailableError
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.storage import Store
 from homeassistant.util.ssl import SSLCipherList
 
@@ -44,6 +44,7 @@ from .const import (
     CONF_UID,
     CONF_USE_HTTPS,
     DOMAIN,
+    CONF_ONVIF_EVENTS_REVERSE_PROXY,
 )
 from .exceptions import (
     PasswordIncompatible,
@@ -131,6 +132,7 @@ class ReolinkHost:
         self._webhook_reachable: bool = False
         self._long_poll_received: bool = False
         self._long_poll_error: bool = False
+        self._webhook_reverse_proxy = options.get(CONF_ONVIF_EVENTS_REVERSE_PROXY)
         self._cancel_poll: CALLBACK_TYPE | None = None
         self._cancel_tcp_push_check: CALLBACK_TYPE | None = None
         self._cancel_onvif_check: CALLBACK_TYPE | None = None
@@ -747,6 +749,18 @@ class ReolinkHost:
             sub_type,
         )
 
+    def _get_webhook_base_url(self) -> str:
+        """Return the URL of the webhook reverse proxy if configured. Otherwise return the Home Assistant instance URL."""
+        if self._webhook_reverse_proxy:
+            return self._webhook_reverse_proxy
+
+        return get_url(self._hass, prefer_external=False)
+
+    def _generate_webhook_url(self, event_id: str) -> str:
+        base_url = self._get_webhook_base_url()
+        webhook_path = webhook.async_generate_path(event_id)
+        return f"{base_url}{webhook_path}"
+
     def register_webhook(self, id: str) -> None:
         """Register the webhook for motion events."""
         event_id = f"{id}_{webhook.async_generate_id()}"
@@ -757,9 +771,7 @@ class ReolinkHost:
         )
 
         try:
-            self._webhook_url[id] = webhook.async_generate_url(
-                self._hass, event_id, prefer_external=False
-            )
+            self._webhook_url[id] = self._generate_webhook_url(event_id)
         except NoURLAvailableError as err:
             self.unregister_webhook(id)
             raise ReolinkWebhookException(
